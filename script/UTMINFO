@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+
+import sys
+import re
+import requests
+from datetime import datetime, date
+
+if len(sys.argv) < 3:
+    print('no input parameters have been received')
+    sys.exit()
+
+
+def filter(value, mask=''):
+    if value is None:
+        return 0
+    if mask == '>':  # только положительные числа
+        return value if value >= 0 else 0
+    elif mask == '<':  # только модуль отрицательные числа
+        return abs(value) if value <= 0 else 0
+    elif mask == 'abs':  # модуль числа
+        return abs(value)
+    return value
+
+
+def days_to(target_date, date_format='%Y-%m-%d %H:%M:%S'):
+    '''Получение дней до указанной даты'''
+    if isinstance(target_date, str):
+        target_date = datetime.strptime(target_date, date_format).date()
+    elif isinstance(target_date, datetime):
+        target_date = target_date.date()
+
+    return (target_date - date.today()).days
+
+
+def minutes_to(target_datetime, date_format='%Y-%m-%d %H:%M:%S'):
+    '''Получение минут до указанной даты'''
+    if isinstance(target_datetime, str):
+        target_datetime = datetime.strptime(target_datetime, date_format)
+    elif isinstance(target_datetime, date) and not isinstance(target_datetime, datetime):
+        target_datetime = datetime.combine(
+            target_datetime, datetime.min.time())
+
+    return int((target_datetime - datetime.now()).total_seconds() // 60)
+
+
+def get_html(url):
+    '''Получение HTML содержимого'''
+    try:
+        response = requests.get(url, timeout=3)
+        response.raise_for_status()
+        return response.text
+    except requests.RequestException:
+        sys.exit()
+
+
+def get_status(url):
+    '''Проверка доступности веб-службы УТМ'''
+    try:
+        response = requests.get(url, timeout=3)
+        response.raise_for_status()
+        if (b'<title>\xd0\xa3\xd0\xa2\xd0\x9c</title>' in response.content or
+            b'<title>\xc3\xd2\xcc</title>' in response.content or
+            b'<title>\xa3\xa2\x8c</title>' in response.content):
+            return 1 
+        else:
+            return 0
+    except requests.RequestException:
+        return 0
+
+
+def get_version(url):
+    '''Получение версии УТМ модуля'''
+    return get_html(url + '/info/version')
+
+
+def get_db_time(url):
+    '''Получение даты создания БД на УТМ'''
+    return get_html(url + '/info/dbtime')
+
+
+def get_rsa_release(url):
+    '''Получение даты выпуска RSA сертификата'''
+    html = get_html(url + '/home')
+    start_rsa_pattern = r'Сертификат RSA.*?Действителен с (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})'
+    start_rsa_match = re.search(start_rsa_pattern, html, re.DOTALL)
+    start_rsa = start_rsa_match.group(1) if start_rsa_match else None
+    return start_rsa
+
+
+def get_rsa_expiry(url):
+    '''Получение даты окончания RSA сертификата'''
+    html = get_html(url + '/home')
+    end_rsa_pattern = r'Сертификат RSA.*?по (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})'
+    end_rsa_match = re.search(end_rsa_pattern, html, re.DOTALL)
+    end_rsa = end_rsa_match.group(1) if end_rsa_match else None
+    return end_rsa
+
+
+def get_gost_release(url):
+    '''Получение даты выпуска ГОСТ сертификата'''
+    html = get_html(url + '/home')
+    start_gost_pattern = r'Сертификат ГОСТ.*?Действителен с (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})'
+    start_gost_match = re.search(start_gost_pattern, html, re.DOTALL)
+    start_gost = start_gost_match.group(1) if start_gost_match else None
+    return start_gost
+
+
+def get_gost_expiry(url):
+    '''Получение даты окончания ГОСТ сертификата'''
+    html = get_html(url + '/home')
+    end_gost_pattern = r'Сертификат ГОСТ.*?по (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})'
+    end_gost_match = re.search(end_gost_pattern, html, re.DOTALL)
+    end_gost = end_gost_match.group(1) if end_gost_match else None
+    return end_gost
+
+
+def get_out_total(url):
+    '''Получение колличества документов в БД УТМ'''
+    html = get_html(url + '/opt/out/total')
+    pattern = r'<total>(.*?)</total>'
+    match = re.search(pattern, html)
+
+    return match.group(1) if match else None
+
+
+def get_buffer(url, combine=''):
+    '''Получение даты неотправленного чега'''
+    html = get_html(url + '/home')
+
+    if 'Отсутствуют неотправленные чеки' in html:
+        return None
+
+    pattern = r'Чеки не отправлялись с (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})'
+    match = re.search(pattern, html)
+
+    if not match:
+        return None
+
+    date_str = match.group(1)
+
+    if combine == 'days':
+        return days_to(date_str)
+    elif combine == 'minutes':
+        return minutes_to(date_str)
+    else:
+        return date_str
+
+if sys.argv[1] == 'status':
+    print(get_status(sys.argv[2]))
+
+elif sys.argv[1] == 'version':
+    print(get_version(sys.argv[2]))
+
+elif sys.argv[1] == 'db_time':
+    print(get_db_time(sys.argv[2]))
+
+elif sys.argv[1] == 'rsa_release':
+    print(get_rsa_release(sys.argv[2]))
+
+elif sys.argv[1] == 'rsa_release_days':
+    print(filter(days_to(get_rsa_release(sys.argv[2])), '<'))
+
+elif sys.argv[1] == 'rsa_expiry':
+    print(get_rsa_expiry(sys.argv[2]))
+
+elif sys.argv[1] == 'rsa_expiry_days':
+    print(filter(days_to(get_rsa_expiry(sys.argv[2])), '>'))
+
+elif sys.argv[1] == 'gost_release':
+    print(get_gost_release(sys.argv[2]))
+
+elif sys.argv[1] == 'gost_release_days':
+    print(filter(days_to(get_gost_release(sys.argv[2])), '<'))
+
+elif sys.argv[1] == 'gost_expiry':
+    print(get_gost_expiry(sys.argv[2]))
+
+elif sys.argv[1] == 'gost_expiry_days':
+    print(filter(days_to(get_gost_expiry(sys.argv[2])), '>'))
+
+elif sys.argv[1] == 'buffer':
+    print(get_buffer(sys.argv[2]))
+
+elif sys.argv[1] == 'buffer_minutes':
+    print(filter(get_buffer(sys.argv[2], 'minutes'), 'abs'))
+
+elif sys.argv[1] == 'buffer_days':
+    print(filter(get_buffer(sys.argv[2], 'days'), 'abs'))
+    
+
