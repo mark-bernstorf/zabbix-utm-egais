@@ -1,0 +1,244 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 3c7f8794cce340799fa587a5b8a3dc33
+      name: 'ZBX / УТМ'
+  templates:
+    - uuid: 91eae14614c24fb8aec22d83a6ad732d
+      template: 'EGAIS UTM Template'
+      name: 'EGAIS UTM Template'
+      description: 'Шаблон для мониторинга УТМ'
+      groups:
+        - name: 'ZBX / УТМ'
+      items:
+        - uuid: 00839bc90f394c6da7259fcdf62a32ff
+          name: buffer
+          type: EXTERNAL
+          key: 'UTMINFO[buffer, {$PROTOCOL}://{HOST.CONN}:{$PORT}]'
+          delay: 30m
+          history: 3d
+          value_type: TEXT
+          trends: '0'
+          description: 'дата и время самого старого чека в буфере'
+        - uuid: 5780124517be49f0a6dc979c5edc62f7
+          name: buffer_minutes
+          type: EXTERNAL
+          key: 'UTMINFO[buffer_minutes, {$PROTOCOL}://{HOST.CONN}:{$PORT}]'
+          history: 30d
+          trends: 30d
+          description: 'время самого старого чека в буфере в минутах'
+          triggers:
+            - uuid: 34b68c53356e43408f68276b9ab8862b
+              expression: 'last(/EGAIS UTM Template/UTMINFO[buffer_minutes, {$PROTOCOL}://{HOST.CONN}:{$PORT}])>{$BUFFER_CRITICAL}'
+              name: 'docs are stuck in the buffer'
+              event_name: 'в буфере зависли документы'
+              priority: DISASTER
+              dependencies:
+                - name: 'service is not available'
+                  expression: 'last(/EGAIS UTM Template/UTMINFO[status, {$PROTOCOL}://{HOST.CONN}:{$PORT}],#2)=0 and (time()<{$MAINT_FROM} or time()>{$MAINT_TO})'
+            - uuid: 0e50deeda2664f88b5600828151a565b
+              expression: 'last(/EGAIS UTM Template/UTMINFO[buffer_minutes, {$PROTOCOL}://{HOST.CONN}:{$PORT}])>{$BUFFER_WARNING}'
+              name: 'docs have accumulated in the buffer'
+              event_name: 'в буфере накопились документы'
+              priority: WARNING
+              dependencies:
+                - name: 'service is not available'
+                  expression: 'last(/EGAIS UTM Template/UTMINFO[status, {$PROTOCOL}://{HOST.CONN}:{$PORT}],#2)=0 and (time()<{$MAINT_FROM} or time()>{$MAINT_TO})'
+        - uuid: 86f8d4c3b94342be80890d05e3baed85
+          name: db_time
+          type: EXTERNAL
+          key: 'UTMINFO[db_time, {$PROTOCOL}://{HOST.CONN}:{$PORT}]'
+          delay: 1d
+          history: 90d
+          value_type: TEXT
+          trends: '0'
+          description: 'время создания базы, по нему можно определить дату установки или обновления модуля'
+          triggers:
+            - uuid: e8432982a3ec40579497dd1eaeb8c8e9
+              expression: 'change(/EGAIS UTM Template/UTMINFO[db_time, {$PROTOCOL}://{HOST.CONN}:{$PORT}])=1'
+              name: 'service has been reinstalled'
+              event_name: 'служба была переустановлена'
+              priority: INFO
+              dependencies:
+                - name: 'service is not available'
+                  expression: 'last(/EGAIS UTM Template/UTMINFO[status, {$PROTOCOL}://{HOST.CONN}:{$PORT}],#2)=0 and (time()<{$MAINT_FROM} or time()>{$MAINT_TO})'
+        - uuid: e0f84566faeb47d88b92cc6f110e80b7
+          name: gost_expiry
+          type: EXTERNAL
+          key: 'UTMINFO[gost_expiry, {$PROTOCOL}://{HOST.CONN}:{$PORT}]'
+          delay: 1d
+          history: 90d
+          value_type: TEXT
+          trends: '0'
+          description: 'дата и время истечения срока действия ГОСТ сертификата'
+        - uuid: c251f33a29a241cbac798ab4fb8d8ae6
+          name: gost_expiry_days
+          type: EXTERNAL
+          key: 'UTMINFO[gost_expiry_days, {$PROTOCOL}://{HOST.CONN}:{$PORT}]'
+          delay: 1d
+          history: 90d
+          trends: 90d
+          description: 'дата истечения срока действия ГОСТ сертификата в днях'
+          triggers:
+            - uuid: 7591f138dceb4511a9487370063cf9e4
+              expression: 'last(/EGAIS UTM Template/UTMINFO[gost_expiry_days, {$PROTOCOL}://{HOST.CONN}:{$PORT}])<{$CRT_EXP_CRITICAL}'
+              name: 'GOST certificate has expired'
+              event_name: 'срок действия сертификата ГОСТ истёк'
+              priority: DISASTER
+              dependencies:
+                - name: 'service is not available'
+                  expression: 'last(/EGAIS UTM Template/UTMINFO[status, {$PROTOCOL}://{HOST.CONN}:{$PORT}],#2)=0 and (time()<{$MAINT_FROM} or time()>{$MAINT_TO})'
+            - uuid: 265935ce1a574c4cb0c96a35def419f7
+              expression: 'last(/EGAIS UTM Template/UTMINFO[gost_expiry_days, {$PROTOCOL}://{HOST.CONN}:{$PORT}])<{$CRT_EXP_WARNING}'
+              name: 'GOST certificate will expire soon'
+              event_name: 'срок действия сертификата ГОСТ скоро истечет'
+              priority: HIGH
+              dependencies:
+                - name: 'service is not available'
+                  expression: 'last(/EGAIS UTM Template/UTMINFO[status, {$PROTOCOL}://{HOST.CONN}:{$PORT}],#2)=0 and (time()<{$MAINT_FROM} or time()>{$MAINT_TO})'
+        - uuid: 0aa20b9d7c32430e9ecfff5669720ed6
+          name: gost_release
+          type: EXTERNAL
+          key: 'UTMINFO[gost_release, {$PROTOCOL}://{HOST.CONN}:{$PORT}]'
+          delay: 1d
+          history: 90d
+          value_type: TEXT
+          trends: '0'
+          description: 'дата и время выпуска сертификата ГОСТ'
+        - uuid: 16b09a0d3d974cd29c8f3015cc180b97
+          name: gost_release_days
+          type: EXTERNAL
+          key: 'UTMINFO[gost_release_days, {$PROTOCOL}://{HOST.CONN}:{$PORT}]'
+          delay: 1d
+          history: 90d
+          trends: 90d
+          description: 'дата выпуска сертификата ГОСТ в днях'
+        - uuid: 6a4975b9685c43beb6901e4e2bc7866a
+          name: rsa_expiry
+          type: EXTERNAL
+          key: 'UTMINFO[rsa_expiry, {$PROTOCOL}://{HOST.CONN}:{$PORT}]'
+          delay: 1d
+          history: 90d
+          value_type: TEXT
+          trends: '0'
+          description: 'дата и время истечения срока действия RSA сертификата'
+        - uuid: d294ae0ccd7e4513bf6e3c1741203085
+          name: rsa_expiry_days
+          type: EXTERNAL
+          key: 'UTMINFO[rsa_expiry_days, {$PROTOCOL}://{HOST.CONN}:{$PORT}]'
+          delay: 1d
+          history: 90d
+          trends: 90d
+          description: 'дата истечения срока действия RSA сертификата в днях'
+          triggers:
+            - uuid: 29508421d3814a328088c89a0822e7d4
+              expression: 'last(/EGAIS UTM Template/UTMINFO[rsa_expiry_days, {$PROTOCOL}://{HOST.CONN}:{$PORT}])<{$CRT_EXP_CRITICAL}'
+              name: 'RSA certificate has expired'
+              event_name: 'срок действия сертификата RSA истёк'
+              priority: DISASTER
+              dependencies:
+                - name: 'service is not available'
+                  expression: 'last(/EGAIS UTM Template/UTMINFO[status, {$PROTOCOL}://{HOST.CONN}:{$PORT}],#2)=0 and (time()<{$MAINT_FROM} or time()>{$MAINT_TO})'
+            - uuid: 86a5537a0e26466ea01a749861c9a267
+              expression: 'last(/EGAIS UTM Template/UTMINFO[rsa_expiry_days, {$PROTOCOL}://{HOST.CONN}:{$PORT}])<{$CRT_EXP_WARNING}'
+              name: 'RSA certificate will expire soon'
+              event_name: 'срок действия сертификата RSA скоро истечет'
+              priority: HIGH
+              dependencies:
+                - name: 'service is not available'
+                  expression: 'last(/EGAIS UTM Template/UTMINFO[status, {$PROTOCOL}://{HOST.CONN}:{$PORT}],#2)=0 and (time()<{$MAINT_FROM} or time()>{$MAINT_TO})'
+        - uuid: b02ed97a52ec4c398ef37d8dd8bc7dd0
+          name: rsa_release
+          type: EXTERNAL
+          key: 'UTMINFO[rsa_release, {$PROTOCOL}://{HOST.CONN}:{$PORT}]'
+          delay: 1d
+          history: 90d
+          value_type: TEXT
+          trends: '0'
+          description: 'дата и время выпуска RSA сертификата'
+        - uuid: 18875948a52b4808bbe4312f36cc0576
+          name: rsa_release_days
+          type: EXTERNAL
+          key: 'UTMINFO[rsa_release_days, {$PROTOCOL}://{HOST.CONN}:{$PORT}]'
+          delay: 1d
+          history: 90d
+          trends: 90d
+          description: 'дата выпуска RSA сертификата в днях'
+        - uuid: 030fbb29ed4442a8913f4593dddce2c4
+          name: status
+          type: EXTERNAL
+          key: 'UTMINFO[status, {$PROTOCOL}://{HOST.CONN}:{$PORT}]'
+          history: 90d
+          trends: 90d
+          description: 'доступность сервиса'
+          valuemap:
+            name: status
+          triggers:
+            - uuid: 7fe79b8c57224b8ca3dc260d365addcc
+              expression: 'last(/EGAIS UTM Template/UTMINFO[status, {$PROTOCOL}://{HOST.CONN}:{$PORT}],#2)=0 and (time()<{$MAINT_FROM} or time()>{$MAINT_TO})'
+              name: 'service is not available'
+              event_name: 'сервис УТМ не доступен'
+              priority: DISASTER
+              description: 'Сервис УТМ не доступен'
+              manual_close: 'YES'
+        - uuid: c0bff85892fa418c8d06bc45411b2bb4
+          name: version
+          type: EXTERNAL
+          key: 'UTMINFO[version, {$PROTOCOL}://{HOST.CONN}:{$PORT}]'
+          delay: 1d
+          history: 90d
+          value_type: TEXT
+          trends: '0'
+          description: 'версия модуля'
+          triggers:
+            - uuid: 60934f00e44340a988dc821886315bed
+              expression: 'change(/EGAIS UTM Template/UTMINFO[version, {$PROTOCOL}://{HOST.CONN}:{$PORT}])=1'
+              name: 'version has been changed'
+              event_name: 'версия модуля изменилась'
+              priority: INFO
+              dependencies:
+                - name: 'service is not available'
+                  expression: 'last(/EGAIS UTM Template/UTMINFO[status, {$PROTOCOL}://{HOST.CONN}:{$PORT}],#2)=0 and (time()<{$MAINT_FROM} or time()>{$MAINT_TO})'
+      macros:
+        - macro: '{$BUFFER_CRITICAL}'
+          value: '1440'
+          description: 'бить тревогу, когда возраст самого старого неотправленного документа превышает N минут'
+        - macro: '{$BUFFER_WARNING}'
+          value: '30'
+          description: 'предупреждать, когда возраст самого старого неотправленного документа превышает N минут'
+        - macro: '{$CRT_EXP_CRITICAL}'
+          value: '1'
+          description: 'бить тревогу, когда срок действия сертификата меньше N дней'
+        - macro: '{$CRT_EXP_WARNING}'
+          value: '15'
+          description: 'предупреждать, когда срок действия сертификата меньше N дней'
+        - macro: '{$MAINT_FROM}'
+          value: '005000'
+          description: 'с какого времени технологическое окно, когда триггер не сработает (для перезагрузки модуля по расписанию и т.п.) (00:50:00 по умолчанию)'
+        - macro: '{$MAINT_TO}'
+          value: '011000'
+          description: 'до какого времени технологическое окно, когда триггер не сработает (для перезагрузки модуля по расписанию и т.п.) (01:10:00 по умолчанию)'
+        - macro: '{$PORT}'
+          value: '8080'
+          description: 'порт веб-сервиса'
+        - macro: '{$PROTOCOL}'
+          value: HTTP
+          description: протокол
+      valuemaps:
+        - uuid: 3a37d493aea8448bb3614eef05b44092
+          name: status
+          mappings:
+            - value: '0'
+              newvalue: DOWN
+            - value: '1'
+              newvalue: UP
+  graphs:
+    - uuid: 6c06a5b88e1e42f8bca2d14d9b996fa0
+      name: 'UTM service availability'
+      graph_items:
+        - drawtype: BOLD_LINE
+          color: 1A7C11
+          calc_fnc: ALL
+          item:
+            host: 'EGAIS UTM Template'
+            key: 'UTMINFO[status, {$PROTOCOL}://{HOST.CONN}:{$PORT}]'
